@@ -11,9 +11,10 @@ pipeline {
 
   environment {
     IMAGE = "tictactoe:${env.BUILD_NUMBER}"
-    NPM_CACHE_VOL = "npm-cache"                 // named Docker volume for faster npm installs
-    TRIVY_SEVERITY = "HIGH,CRITICAL"            // quality gate
-    TRIVY_EXIT_CODE = "1"                       // fail build if findings at selected severities
+    NPM_CACHE_VOL = "npm-cache"
+    TRIVY_SEVERITY = "HIGH,CRITICAL"
+    TRIVY_EXIT_CODE = "1"
+    PREVIEW_PORT = "8090"          // <— not 8080 (Jenkins)
   }
 
   stages {
@@ -81,31 +82,32 @@ pipeline {
       }
     }
 
-    stage('Smoke Test') {
-      steps {
-        sh '''
-          # Run the built image and probe it
-          docker rm -f ttt-smoke >/dev/null 2>&1 || true
-          docker run -d --rm --name ttt-smoke -p 8080:80 "$IMAGE"
+  stage('Smoke Test') {
+    steps {
+      sh '''
+        set -e
+        docker rm -f ttt-smoke >/dev/null 2>&1 || true
+        docker run -d --rm --name ttt-smoke "$IMAGE"
 
-          # Simple health check (static site): expect HTTP 200
-          for i in $(seq 1 20); do
-            if curl -fsS http://localhost:8080/ >/dev/null; then
-              echo "Smoke OK"
-              break
-            fi
-            echo "Waiting for container..."
-            sleep 0.5
-          done
+        # Probe the app without binding a host port:
+        # use network=container:ttt-smoke so curl hits localhost:80 inside that container
+        for i in $(seq 1 20); do
+          if docker run --rm --network container:ttt-smoke curlimages/curl \
+              curl -fsS http://localhost:80/ >/dev/null; then
+            echo "Smoke OK"
+            break
+          fi
+          echo "Waiting for container..."
+          sleep 0.5
+        done
 
-          # Fail if curl never succeeded
-          curl -fS http://localhost:8080/ >/dev/null
+        docker run --rm --network container:ttt-smoke curlimages/curl curl -fS http://localhost:80/ >/dev/null
 
-          # Cleanup
-          docker rm -f ttt-smoke >/dev/null 2>&1 || true
-        '''
-      }
+        docker rm -f ttt-smoke >/dev/null 2>&1 || true
+      '''
     }
+  }
+
 
     stage('Security Scan (Trivy)') {
       steps {
@@ -135,6 +137,15 @@ pipeline {
     //     }
     //   }
     // }
+  }
+  stage('Deploy to Preview') {
+    steps {
+      sh '''
+        docker rm -f ttt-preview >/dev/null 2>&1 || true
+        docker run -d --name ttt-preview -p ${PREVIEW_PORT}:80 "$IMAGE"
+        echo "Preview running at: http://$(hostname -i | awk "{print \\$1}"):${PREVIEW_PORT}"
+      '''
+    }
   }
 
   post {
