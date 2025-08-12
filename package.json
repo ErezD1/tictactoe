@@ -19,11 +19,5 @@
   "jest-junit": {
     "outputDirectory": "reports",
     "outputName": "junit.xml"
-  },
-  "jest": {
-    "testEnvironment": "node",
-    "collectCoverageFrom": [
-      "src/**/*.js"
-    ]
   }
 }
