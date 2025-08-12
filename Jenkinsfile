@@ -11,29 +11,26 @@ pipeline {
 
     stage('Lint & Test') {
       steps {
-        dir('tictactoe') {
-          sh '''
-            docker run --rm -v "$PWD":/work -w /work node:20 bash -lc '
-              if [ -f package-lock.json ]; then npm ci; else npm install; fi
-              npm run lint
-              npm run test:ci
-            '
-          '''
-        }
+        sh '''
+          echo "PWD=$(pwd)"; ls -la
+          docker run --rm -v "$PWD":/work -w /work node:20 bash -lc '
+            if [ -f package-lock.json ]; then npm ci; else npm install; fi
+            npm run lint
+            npm run test:ci
+          '
+        '''
       }
       post {
         always {
-          junit 'tictactoe/reports/junit.xml'
-          archiveArtifacts artifacts: 'tictactoe/coverage/**', fingerprint: true
+          junit 'reports/junit.xml'
+          archiveArtifacts artifacts: 'coverage/**', fingerprint: true, allowEmptyArchive: true
         }
       }
     }
 
     stage('Docker Build') {
       steps {
-        dir('tictactoe') {
-          sh 'docker build -t $IMAGE .'
-        }
+        sh 'docker build -t $IMAGE .'
       }
     }
 
