@@ -5,16 +5,15 @@ pipeline {
     timestamps()
     disableConcurrentBuilds()
     buildDiscarder(logRotator(numToKeepStr: '20'))
-    // If you have the AnsiColor plugin, uncomment:
-    // ansiColor('xterm')
+    // ansiColor('xterm') // uncomment if you have the AnsiColor plugin
   }
 
   environment {
-    IMAGE = "tictactoe:${env.BUILD_NUMBER}"
-    NPM_CACHE_VOL = "npm-cache"
-    TRIVY_SEVERITY = "HIGH,CRITICAL"
-    TRIVY_EXIT_CODE = "1"
-    PREVIEW_PORT = "8090"          // <— not 8080 (Jenkins)
+    IMAGE           = "tictactoe:${env.BUILD_NUMBER}"
+    NPM_CACHE_VOL   = "npm-cache"               // named Docker volume for faster npm installs
+    TRIVY_SEVERITY  = "HIGH,CRITICAL"           // quality gate
+    TRIVY_EXIT_CODE = "1"                       // fail build if selected severities found
+    PREVIEW_PORT    = "8090"                    // not 8080 (Jenkins often uses that)
   }
 
   stages {
@@ -60,7 +59,6 @@ pipeline {
       }
       post {
         always {
-          // Publish test results and coverage even if tests fail
           junit testResults: 'reports/junit.xml', allowEmptyResults: true
           archiveArtifacts artifacts: 'coverage/**', fingerprint: true, allowEmptyArchive: true
         }
@@ -82,32 +80,31 @@ pipeline {
       }
     }
 
-  stage('Smoke Test') {
-    steps {
-      sh '''
-        set -e
-        docker rm -f ttt-smoke >/dev/null 2>&1 || true
-        docker run -d --rm --name ttt-smoke "$IMAGE"
+    stage('Smoke Test') {
+      steps {
+        sh '''
+          set -e
+          docker rm -f ttt-smoke >/dev/null 2>&1 || true
+          docker run -d --rm --name ttt-smoke "$IMAGE"
 
-        # Probe the app without binding a host port:
-        # use network=container:ttt-smoke so curl hits localhost:80 inside that container
-        for i in $(seq 1 20); do
-          if docker run --rm --network container:ttt-smoke curlimages/curl \
-              curl -fsS http://localhost:80/ >/dev/null; then
-            echo "Smoke OK"
-            break
-          fi
-          echo "Waiting for container..."
-          sleep 0.5
-        done
+          # Probe without binding a host port:
+          # use network=container:ttt-smoke so curl hits localhost:80 inside that container
+          for i in $(seq 1 30); do
+            if docker run --rm --network container:ttt-smoke curlimages/curl \
+                 curl -fsS http://localhost:80/ >/dev/null; then
+              echo "Smoke OK"
+              break
+            fi
+            echo "Waiting for container..."
+            sleep 0.5
+          done
 
-        docker run --rm --network container:ttt-smoke curlimages/curl curl -fS http://localhost:80/ >/dev/null
+          docker run --rm --network container:ttt-smoke curlimages/curl curl -fS http://localhost:80/ >/dev/null
 
-        docker rm -f ttt-smoke >/dev/null 2>&1 || true
-      '''
+          docker rm -f ttt-smoke >/dev/null 2>&1 || true
+        '''
+      }
     }
-  }
-
 
     stage('Security Scan (Trivy)') {
       steps {
@@ -122,29 +119,16 @@ pipeline {
       }
     }
 
-    // Optional: push to a registry (GHCR, Docker Hub, etc.)
-    // stage('Publish Image') {
-    //   when { branch 'master' }
-    //   steps {
-    //     withCredentials([string(credentialsId: 'ghcr_pat', variable: 'GHCR_PAT')]) {
-    //       sh '''
-    //         echo "$GHCR_PAT" | docker login ghcr.io -u <your_user> --password-stdin
-    //         docker tag "$IMAGE" ghcr.io/<your_user>/tictactoe:${BUILD_NUMBER}
-    //         docker tag "$IMAGE" ghcr.io/<your_user>/tictactoe:latest
-    //         docker push ghcr.io/<your_user>/tictactoe:${BUILD_NUMBER}
-    //         docker push ghcr.io/<your_user>/tictactoe:latest
-    //       '''
-    //     }
-    //   }
-    // }
-  }
-  stage('Deploy to Preview') {
-    steps {
-      sh '''
-        docker rm -f ttt-preview >/dev/null 2>&1 || true
-        docker run -d --name ttt-preview -p ${PREVIEW_PORT}:80 "$IMAGE"
-        echo "Preview running at: http://$(hostname -i | awk "{print \\$1}"):${PREVIEW_PORT}"
-      '''
+    stage('Deploy to Preview') {
+      steps {
+        sh '''
+          docker rm -f ttt-preview >/dev/null 2>&1 || true
+          docker run -d --name ttt-preview -p ${PREVIEW_PORT}:80 "$IMAGE"
+
+          ip=$(hostname -i | awk '{print $1}')
+          echo "Preview running at: http://$ip:${PREVIEW_PORT}"
+        '''
+      }
     }
   }
 
