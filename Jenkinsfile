@@ -9,24 +9,27 @@ pipeline {
       steps { checkout scm }
     }
 
-    stage('Lint & Test') {
-      steps {
-        sh '''
-          echo "PWD=$(pwd)"; ls -la
-          docker run --rm --volumes-from jenkins -w "$PWD" node:20 bash -lc '
-            if [ -f package-lock.json ]; then npm ci; else npm install; fi
+  stage('Lint & Test') {
+    steps {
+      sh '''
+        echo "PWD=$(pwd)"; ls -la
+        docker run --rm --volumes-from jenkins -w "$PWD" \
+          -e NODE_OPTIONS=--experimental-vm-modules \
+          node:20 bash -lc '
+            if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
             npm run lint
             npm run test:ci
           '
-        '''
-      }
-      post {
-        always {
-          junit 'reports/junit.xml'
-          archiveArtifacts artifacts: 'coverage/**', fingerprint: true, allowEmptyArchive: true
-        }
+      '''
+    }
+    post {
+      always {
+        junit testResults: 'reports/junit.xml', allowEmptyResults: true
+        archiveArtifacts artifacts: 'coverage/**', fingerprint: true, allowEmptyArchive: true
       }
     }
+  }
+
 
     stage('Docker Build') {
       steps {
