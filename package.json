@@ -10,10 +10,20 @@
     "format": "prettier -w ."
   },
   "devDependencies": {
-    "eslint": "8.57.0",
+    "eslint": "^9.9.0",
     "eslint-config-prettier": "^9.1.0",
     "jest": "^29.7.0",
     "jest-junit": "^16.0.0",
     "prettier": "^3.3.3"
+  },
+  "jest-junit": {
+    "outputDirectory": "reports",
+    "outputName": "junit.xml"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "src/**/*.js"
+    ]
   }
 }
