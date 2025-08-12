@@ -13,7 +13,7 @@ pipeline {
       steps {
         sh '''
           echo "PWD=$(pwd)"; ls -la
-          docker run --rm -v "$PWD":/work -w /work node:20 bash -lc '
+          docker run --rm --volumes-from jenkins -w "$PWD" node:20 bash -lc '
             if [ -f package-lock.json ]; then npm ci; else npm install; fi
             npm run lint
             npm run test:ci
