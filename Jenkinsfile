@@ -1,9 +1,6 @@
 pipeline {
   agent any
-  options {
-    timestamps()
-    ansiColor('xterm')
-  }
+  options { timestamps() }
   environment {
     APP_NAME = 'tictactoe'
     IMAGE = "tictactoe:${env.BUILD_NUMBER}"
@@ -12,12 +9,10 @@ pipeline {
     stage('Checkout') {
       steps { checkout scm }
     }
-
     stage('Lint & Test') {
       steps {
         sh '''
           docker run --rm -v "$PWD":/work -w /work node:20 bash -lc '
-            corepack enable || true
             npm ci || npm install
             npm run lint
             npm run test:ci
@@ -27,22 +22,15 @@ pipeline {
       post {
         always {
           junit 'reports/junit.xml'
-          publishHTML(target: [
-            reportDir: 'coverage/lcov-report',
-            reportFiles: 'index.html',
-            reportName: 'Coverage'
-          ])
           archiveArtifacts artifacts: 'coverage/**', fingerprint: true
         }
       }
     }
-
     stage('Docker Build') {
       steps {
         sh 'docker build -t $IMAGE .'
       }
     }
-
     stage('Security Scan (Trivy)') {
       steps {
         sh '''
@@ -52,20 +40,6 @@ pipeline {
         '''
       }
     }
-
-    stage('(Optional) Smoke Deploy') {
-      when { expression { return false } } // flip to true if you want to run locally
-      steps {
-        sh '''
-          cid=$(docker run -d -p 8080:80 "$IMAGE")
-          sleep 2
-          curl -fsS http://localhost:8080 >/dev/null
-          docker rm -f "$cid"
-        '''
-      }
-    }
   }
-  post {
-    always { cleanWs() }
-  }
+  post { always { cleanWs() } }
 }
