@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tic‑Tac‑Toe</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>Tic‑Tac‑Toe</h1>
+    <div id="status">X to play</div>
+    <div id="board" class="board" role="grid" aria-label="Tic‑Tac‑Toe board"></div>
+    <button id="reset">Reset</button>
+  </main>
+  <script type="module">
+    import { newGame } from "./src/ui.js";
+    newGame(document.getElementById("board"), document.getElementById("status"), document.getElementById("reset"));
+  </script>
+</body>
+</html>
